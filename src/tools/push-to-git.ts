@@ -29,6 +29,7 @@ import {
   getGitopsClonesDir,
   scrubCredentials,
   sanitizeRelativePath,
+  buildManifestDestinationPath,
   isRepoHostAllowed,
   describeDisallowedRepoHost,
   suggestedActionsForDisallowedRepo,
@@ -70,6 +71,7 @@ interface PushToGitArgs {
   solutionId: string;
   repoUrl: string;
   targetPath: string;
+  fileName?: string;
   /**
    * Direct push: the branch to commit to. PR mode: the BASE branch the pull
    * request targets (PRD #710 decision 1). There is deliberately no head-branch
@@ -355,6 +357,7 @@ export async function handlePushToGitTool(
       }
 
       const targetPath = rawTargetPath.replace(/\/+$/, '');
+      const rawManifestPath = buildManifestDestinationPath(targetPath, args.fileName);
 
       const identity = getCurrentIdentity();
       const author = resolveCommitAuthor(identity, args);
@@ -522,7 +525,7 @@ export async function handlePushToGitTool(
           for (const file of manifestFiles) {
             const sanitizedPath = sanitizeRelativePath(file.relativePath);
             files.push({
-              path: path.posix.join(targetPath, sanitizedPath),
+              path: sanitizedPath === 'manifests.yaml' ? rawManifestPath : path.posix.join(targetPath, sanitizedPath),
               content: file.content,
             });
           }

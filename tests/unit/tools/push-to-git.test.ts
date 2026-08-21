@@ -179,6 +179,52 @@ describe('Push to Git Tool', () => {
         )
       ).rejects.toThrow('Invalid target path');
     });
+
+    test.each([
+      '../secret.yaml',
+      '/tmp/secret.yaml',
+      '.',
+      '..',
+      '.git/config',
+      'folder/file.yaml',
+      'folder\\file.yaml',
+      '',
+      '   ',
+    ])('should reject invalid fileName %s', async (fileName) => {
+      const { getGitAuthConfigFromEnv } = await import('../../../src/core/git-utils.js');
+      vi.mocked(getGitAuthConfigFromEnv).mockReturnValue({ pat: 'test-token' });
+
+      const solutionData: SolutionData = {
+        toolName: 'recommend',
+        intent: 'test',
+        type: 'single',
+        score: 1,
+        description: 'test',
+        reasons: [],
+        questions: {},
+        answers: {},
+        timestamp: new Date().toISOString(),
+        generatedManifests: {
+          type: 'raw',
+          files: [{ relativePath: 'manifests.yaml', content: 'test: value' }],
+        },
+      };
+      const session = sessionManager.createSession(solutionData);
+
+      await expect(
+        handlePushToGitTool(
+          {
+            solutionId: session.sessionId,
+            repoUrl: 'https://github.com/test/repo.git',
+            targetPath: 'apps/test/',
+            fileName,
+          },
+          mockDotAI,
+          mockLogger,
+          requestId
+        )
+      ).rejects.toThrow('Invalid file name');
+    });
   });
 
   describe('Authentication', () => {
@@ -367,6 +413,162 @@ describe('Push to Git Tool', () => {
         ]),
         expect.stringContaining('postgresql deployment'),
         { branch: 'main', author: undefined }
+      );
+    });
+
+    test('should preserve manifests.yaml when fileName is omitted', async () => {
+      const { getGitAuthConfigFromEnv, cloneRepo, pushRepo } = await import('../../../src/core/git-utils.js');
+      vi.mocked(getGitAuthConfigFromEnv).mockReturnValue({ pat: 'test-token' });
+      vi.mocked(cloneRepo).mockResolvedValue(undefined);
+      vi.mocked(pushRepo).mockResolvedValue({
+        branch: 'main',
+        commitSha: 'abc123',
+        filesAdded: ['apps/test/manifests.yaml'],
+      });
+
+      const solutionData: SolutionData = {
+        toolName: 'recommend',
+        intent: 'exact filename default',
+        type: 'single',
+        score: 1,
+        description: 'test',
+        reasons: [],
+        questions: {},
+        answers: {},
+        timestamp: new Date().toISOString(),
+        generatedManifests: {
+          type: 'raw',
+          files: [{ relativePath: 'manifests.yaml', content: 'kind: Service' }],
+        },
+      };
+      const session = sessionManager.createSession(solutionData);
+
+      await handlePushToGitTool(
+        {
+          solutionId: session.sessionId,
+          repoUrl: 'https://github.com/test/repo.git',
+          targetPath: 'apps/test/',
+        },
+        mockDotAI,
+        mockLogger,
+        requestId
+      );
+
+      expect(pushRepo).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.arrayContaining([
+          expect.objectContaining({ path: 'apps/test/manifests.yaml' }),
+        ]),
+        expect.stringContaining('exact filename default'),
+        { branch: 'main', author: undefined }
+      );
+    });
+
+    test('should use exact fileName for raw manifests in direct push', async () => {
+      const { getGitAuthConfigFromEnv, cloneRepo, pushRepo } = await import('../../../src/core/git-utils.js');
+      vi.mocked(getGitAuthConfigFromEnv).mockReturnValue({ pat: 'test-token' });
+      vi.mocked(cloneRepo).mockResolvedValue(undefined);
+      vi.mocked(pushRepo).mockResolvedValue({
+        branch: 'main',
+        commitSha: 'abc123',
+        filesAdded: ['apps/postgres/test-dot-ai.yaml'],
+      });
+
+      const solutionData: SolutionData = {
+        toolName: 'recommend',
+        intent: 'exact filename direct push',
+        type: 'single',
+        score: 1,
+        description: 'test',
+        reasons: [],
+        questions: {},
+        answers: {},
+        timestamp: new Date().toISOString(),
+        generatedManifests: {
+          type: 'raw',
+          files: [{ relativePath: 'manifests.yaml', content: 'kind: Service' }],
+        },
+      };
+      const session = sessionManager.createSession(solutionData);
+
+      await handlePushToGitTool(
+        {
+          solutionId: session.sessionId,
+          repoUrl: 'https://github.com/test/repo.git',
+          targetPath: 'apps/postgres/',
+          fileName: 'test-dot-ai.yaml',
+        },
+        mockDotAI,
+        mockLogger,
+        requestId
+      );
+
+      expect(pushRepo).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.arrayContaining([
+          expect.objectContaining({ path: 'apps/postgres/test-dot-ai.yaml' }),
+        ]),
+        expect.stringContaining('exact filename direct push'),
+        { branch: 'main', author: undefined }
+      );
+    });
+
+    test('should use exact fileName for raw manifests in pull request mode', async () => {
+      const { getGitAuthConfigFromEnv, cloneRepo, pushRepo, createPullRequest } = await import('../../../src/core/git-utils.js');
+      vi.mocked(getGitAuthConfigFromEnv).mockReturnValue({ pat: 'test-token' });
+      vi.mocked(cloneRepo).mockResolvedValue(undefined);
+      vi.mocked(pushRepo).mockResolvedValue({
+        branch: 'dot-ai/sol-1234567890-abcdef12-111',
+        commitSha: 'abc123',
+        filesAdded: ['apps/postgres/bucket-example.yaml'],
+      });
+      vi.mocked(createPullRequest).mockResolvedValue({
+        status: 'created',
+        success: true,
+        prUrl: 'https://github.com/test/repo/pull/1',
+        prNumber: 1,
+        branch: 'dot-ai/sol-1234567890-abcdef12-111',
+        baseBranch: 'main',
+        filesChanged: ['apps/postgres/bucket-example.yaml'],
+        commitSha: 'abc123',
+      });
+
+      const solutionData: SolutionData = {
+        toolName: 'recommend',
+        intent: 'exact filename pr mode',
+        type: 'single',
+        score: 1,
+        description: 'test',
+        reasons: [],
+        questions: {},
+        answers: {},
+        timestamp: new Date().toISOString(),
+        generatedManifests: {
+          type: 'raw',
+          files: [{ relativePath: 'manifests.yaml', content: 'kind: Service' }],
+        },
+      };
+      const session = sessionManager.createSession(solutionData);
+
+      await handlePushToGitTool(
+        {
+          solutionId: session.sessionId,
+          repoUrl: 'https://github.com/test/repo.git',
+          targetPath: 'apps/postgres/',
+          fileName: 'bucket-example.yaml',
+          pullRequest: true,
+        },
+        mockDotAI,
+        mockLogger,
+        requestId
+      );
+
+      expect(createPullRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          files: expect.arrayContaining([
+            expect.objectContaining({ path: 'apps/postgres/bucket-example.yaml' }),
+          ]),
+        })
       );
     });
 

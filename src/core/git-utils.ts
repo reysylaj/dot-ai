@@ -301,6 +301,68 @@ export function sanitizeRelativePath(relativePath: string): string {
 }
 
 /**
+ * Normalize an optional exact basename for generated manifests.
+ *
+ * This is intentionally stricter than `sanitizeRelativePath`: callers may not
+ * supply a nested path, a reserved git metadata path, an empty string, or a
+ * control character. The helper returns a basename that can be joined with a
+ * target directory in the push-to-git flow.
+ */
+export function sanitizeExactFileName(fileName?: string): string | undefined {
+  if (fileName === undefined) return undefined;
+
+  if (fileName.trim().length === 0) {
+    throw new Error('Invalid file name: value must not be empty or whitespace');
+  }
+  if (fileName.startsWith('/') || fileName.startsWith('~')) {
+    throw new Error('Invalid file name: use a basename, not an absolute path');
+  }
+  if (fileName === '.' || fileName === '..') {
+    throw new Error('Invalid file name: use a basename, not "." or ".."');
+  }
+  if (fileName.includes('/') || fileName.includes('\\')) {
+    throw new Error('Invalid file name: path separators are not allowed');
+  }
+  if ([...fileName].some(ch => {
+    const code = ch.charCodeAt(0);
+    return code === 0 || code < 32 || code === 127;
+  })) {
+    throw new Error('Invalid file name: control characters are not allowed');
+  }
+  const normalized = path.posix.normalize(fileName);
+  if (
+    normalized === '.' ||
+    normalized === '..' ||
+    path.posix.isAbsolute(normalized) ||
+    normalized.includes('/') ||
+    normalized.includes('\\')
+  ) {
+    throw new Error('Invalid file name: use a basename, not a path');
+  }
+  if (namesGitDir(normalized)) {
+    throw new Error('Invalid file name: reserved git metadata path');
+  }
+  return normalized;
+}
+
+/**
+ * Build the destination path for a raw manifest push.
+ *
+ * Exact filename support is optional: omitting `fileName` preserves the
+ * existing `manifests.yaml` behavior, while providing one writes that basename
+ * under the target directory.
+ */
+export function buildManifestDestinationPath(
+  targetPath: string,
+  fileName?: string
+): string {
+  const sanitizedTargetPath = sanitizeRelativePath(targetPath.trim().replace(/\/+$/, ''));
+  const sanitizedFileName = sanitizeExactFileName(fileName);
+  const resolvedFileName = sanitizedFileName || 'manifests.yaml';
+  return path.posix.join(sanitizedTargetPath, resolvedFileName);
+}
+
+/**
  * `target` with every symlink in the part of it that ALREADY EXISTS resolved,
  * and the not-yet-existing tail appended verbatim.
  *

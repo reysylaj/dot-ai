@@ -47,6 +47,7 @@ export const RECOMMEND_TOOL_INPUT_SCHEMA = {
   // Parameters for pushToGit stage (PRD #395)
   repoUrl: z.string().url().optional().describe('Git repository URL for pushToGit stage (HTTPS)'),
   targetPath: z.string().optional().describe('Path within repository for pushToGit stage (e.g., "apps/postgresql/")'),
+  fileName: z.string().optional().describe('Optional exact filename for the raw manifest written under targetPath; defaults to manifests.yaml when omitted'),
   branch: z.string().optional().describe('Git branch for pushToGit stage (default: main). With pullRequest: true this is the BASE branch the pull request targets, which is never written to'),
   // PRD #710: mode selector for the pushToGit stage
   pullRequest: z.boolean().optional().describe('For pushToGit stage: when true, commit to a server-generated branch and open a pull request against `branch` instead of pushing to it directly. Required for repositories with branch protection. The head branch name is chosen by the server and cannot be supplied'),
@@ -189,6 +190,7 @@ interface RecommendToolArgs {
   // PRD #395: pushToGit parameters
   repoUrl?: string;
   targetPath?: string;
+  fileName?: string;
   branch?: string;
   // PRD #710: PR mode for pushToGit
   pullRequest?: boolean;
@@ -325,6 +327,7 @@ export async function handleRecommendTool(
             solutionId: args.solutionId || '',
             repoUrl: args.repoUrl || '',
             targetPath: args.targetPath || '',
+            fileName: args.fileName,
             branch: args.branch,
             pullRequest: args.pullRequest,
             commitMessage: args.commitMessage,

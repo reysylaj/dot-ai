@@ -3028,6 +3028,10 @@
             "description": "Path within repository for pushToGit stage (e.g., \"apps/postgresql/\")",
             "type": "string"
           },
+          "fileName": {
+            "description": "Optional exact filename for the generated raw manifest. Defaults to manifests.yaml when omitted.",
+            "type": "string"
+          },
           "branch": {
             "description": "Git branch for pushToGit stage (default: main). With pullRequest: true this is the BASE branch the pull request targets, which is never written to",
             "type": "string"

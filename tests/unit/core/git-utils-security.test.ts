@@ -46,6 +46,7 @@ import {
   classifyRepoCredentialRefusal,
   suggestedActionsForDisallowedRepo,
   ALLOWED_REPO_HOSTS_ENV,
+  buildManifestDestinationPath,
 } from '../../../src/core/git-utils';
 
 const TMP_ROOT = path.resolve(process.cwd(), 'tmp', 'unit-git-security');
@@ -454,6 +455,39 @@ describe('pushRepo — writes into the git directory (finding D)', () => {
     expect(
       fs.readFileSync(path.join(clone, '.github/workflows/ci.yaml'), 'utf8')
     ).toBe('name: ci\n');
+  });
+});
+
+describe('buildManifestDestinationPath', () => {
+  test('preserves manifests.yaml when fileName is omitted', () => {
+    expect(buildManifestDestinationPath('apps/test/')).toBe(
+      'apps/test/manifests.yaml'
+    );
+  });
+
+  test('joins an exact fileName under the target path', () => {
+    expect(
+      buildManifestDestinationPath(
+        'project-test-dot-ai/infrastructure/s3bucket',
+        'bucket-example.yaml'
+      )
+    ).toBe('project-test-dot-ai/infrastructure/s3bucket/bucket-example.yaml');
+  });
+
+  test.each([
+    '../secret.yaml',
+    '/tmp/secret.yaml',
+    '.',
+    '..',
+    '.git/config',
+    'folder/file.yaml',
+    'folder\\file.yaml',
+    '',
+    '   ',
+  ])('rejects invalid fileName %s', fileName => {
+    expect(() => buildManifestDestinationPath('apps/test/', fileName)).toThrow(
+      /Invalid file name/
+    );
   });
 });
 
